@@ -1,6 +1,6 @@
 all: true
 dir: '{{.InterfaceDir}}/mocks'
-filename: "{{.InterfaceName}}.go"
+filename: "{{ .InterfaceName | snakecase }}.go"
 formatter: goimports
 formatter-options:
   goimports:
