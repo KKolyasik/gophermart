@@ -3,6 +3,7 @@ package app
 import (
 	"compress/gzip"
 	"context"
+	"fmt"
 	"log/slog"
 	"net/http"
 
@@ -29,8 +30,11 @@ type App struct {
 }
 
 // NewApp собирает зависимости и настраивает HTTP-роутер приложения.
-func NewApp(ctx context.Context, cfg *config.Config, logger *slog.Logger) *App {
-	storage := postgres.NewStorage(ctx, cfg.DatabaseURI, logger)
+func NewApp(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*App, error) {
+	storage, err := postgres.NewStorage(ctx, cfg.DatabaseURI, logger)
+	if err != nil {
+		return nil, fmt.Errorf("new storage: %w", err)
+	}
 	validator := luhn.NewLuhnValidator()
 	accrualProvider := accrual.NewProvider(cfg, logger)
 
@@ -72,19 +76,20 @@ func NewApp(ctx context.Context, cfg *config.Config, logger *slog.Logger) *App {
 	return &App{
 		server: server,
 		logger: logger,
-	}
+	}, nil
 }
 
 // Run запускает HTTP-сервер в отдельной горутине.
-func (a *App) Run() error {
-
+func (a *App) Run() <-chan error {
+	errCh := make(chan error, 1)
 	go func() {
+		defer close(errCh)
 		if err := a.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			panic(err)
+			errCh <- fmt.Errorf("listen and serve: %w", err)
 		}
 	}()
 
-	return nil
+	return errCh
 }
 
 // Stop корректно останавливает HTTP-сервер.

@@ -25,8 +25,9 @@ type UserClaims struct {
 }
 
 // GetUserID достает uid пользователя из context.
-func GetUserID(ctx context.Context) uuid.UUID {
-	return ctx.Value(UserIDKey).(uuid.UUID)
+func GetUserID(ctx context.Context) (uuid.UUID, bool) {
+	uid, ok :=  ctx.Value(UserIDKey).(uuid.UUID)
+	return uid, ok
 }
 
 // GenerateToken создает JWT-токен для пользователя.

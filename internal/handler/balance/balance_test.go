@@ -45,12 +45,14 @@ func (s *BalanceHandlerSuite) TestGetBalance() {
 	uid := uuid.New()
 	tests := []struct {
 		name       string
+		ctx        context.Context
 		setupMock  func()
 		wantStatus int
 		body       string
 	}{
 		{
 			name: "success",
+			ctx:  context.WithValue(context.Background(), auth.UserIDKey, uid),
 			setupMock: func() {
 				s.service.EXPECT().GetBalance(mock.Anything, uid).Return(
 					model.Balance{UserId: uid, Current: 1000, Withdrawn: 500}, nil,
@@ -61,6 +63,7 @@ func (s *BalanceHandlerSuite) TestGetBalance() {
 		},
 		{
 			name: "service error",
+			ctx:  context.WithValue(context.Background(), auth.UserIDKey, uid),
 			setupMock: func() {
 				s.service.EXPECT().GetBalance(mock.Anything, uid).Return(
 					model.Balance{}, errors.New("service error"),
@@ -68,14 +71,19 @@ func (s *BalanceHandlerSuite) TestGetBalance() {
 			},
 			wantStatus: http.StatusInternalServerError,
 		},
+		{
+			name:       "missing user id",
+			ctx:        context.Background(),
+			setupMock:  func() {},
+			wantStatus: http.StatusUnauthorized,
+		},
 	}
 
 	for _, tt := range tests {
 		s.Run(tt.name, func() {
 			tt.setupMock()
 
-			ctx := context.WithValue(context.Background(), auth.UserIDKey, uid)
-			r := httptest.NewRequest(http.MethodGet, "/balance", nil).WithContext(ctx)
+			r := httptest.NewRequest(http.MethodGet, "/balance", nil).WithContext(tt.ctx)
 			w := httptest.NewRecorder()
 
 			s.handler.GetBalance(w, r)
@@ -93,12 +101,14 @@ func (s *BalanceHandlerSuite) TestCreateWithdraw() {
 	uid := uuid.New()
 	tests := []struct {
 		name       string
+		ctx        context.Context
 		setupMock  func()
 		wantStatus int
 		body       string
 	}{
 		{
 			name: "success",
+			ctx:  context.WithValue(context.Background(), auth.UserIDKey, uid),
 			setupMock: func() {
 				s.service.EXPECT().Withdraw(mock.Anything, uid, 100.0, "100").
 					Return(nil)
@@ -108,6 +118,7 @@ func (s *BalanceHandlerSuite) TestCreateWithdraw() {
 		},
 		{
 			name: "not enough funds",
+			ctx:  context.WithValue(context.Background(), auth.UserIDKey, uid),
 			setupMock: func() {
 				s.service.EXPECT().Withdraw(mock.Anything, uid, 100.0, "100").
 					Return(domainerr.ErrInsufficientFunds)
@@ -117,6 +128,7 @@ func (s *BalanceHandlerSuite) TestCreateWithdraw() {
 		},
 		{
 			name: "invalid input",
+			ctx:  context.WithValue(context.Background(), auth.UserIDKey, uid),
 			setupMock: func() {
 				s.service.EXPECT().Withdraw(mock.Anything, uid, 100.0, "100").
 					Return(domainerr.ErrInvalidInput)
@@ -126,11 +138,19 @@ func (s *BalanceHandlerSuite) TestCreateWithdraw() {
 		},
 		{
 			name: "error",
+			ctx:  context.WithValue(context.Background(), auth.UserIDKey, uid),
 			setupMock: func() {
 				s.service.EXPECT().Withdraw(mock.Anything, uid, 100.0, "100").
 					Return(errors.New("error"))
 			},
 			wantStatus: http.StatusInternalServerError,
+			body:       `{"order":"100","sum":100}`,
+		},
+		{
+			name:       "missing user id",
+			ctx:        context.Background(),
+			setupMock:  func() {},
+			wantStatus: http.StatusUnauthorized,
 			body:       `{"order":"100","sum":100}`,
 		},
 	}
@@ -139,8 +159,7 @@ func (s *BalanceHandlerSuite) TestCreateWithdraw() {
 		s.Run(tt.name, func() {
 			tt.setupMock()
 
-			ctx := context.WithValue(context.Background(), auth.UserIDKey, uid)
-			r := httptest.NewRequest(http.MethodPost, "/balance/withdraw", strings.NewReader(tt.body)).WithContext(ctx)
+			r := httptest.NewRequest(http.MethodPost, "/balance/withdraw", strings.NewReader(tt.body)).WithContext(tt.ctx)
 			w := httptest.NewRecorder()
 
 			r.Header.Set("Content-Type", "application/json")
@@ -161,11 +180,13 @@ func (s *BalanceHandlerSuite) TestGetWithdrawals() {
 	}
 	tests := []struct {
 		name       string
+		ctx        context.Context
 		setupMock  func()
 		wantStatus int
 	}{
 		{
 			name: "success",
+			ctx:  context.WithValue(context.Background(), auth.UserIDKey, uid),
 			setupMock: func() {
 				s.service.EXPECT().GetWithdrawals(mock.Anything, uid).
 					Return([]model.Withdraw{
@@ -177,6 +198,7 @@ func (s *BalanceHandlerSuite) TestGetWithdrawals() {
 		},
 		{
 			name: "no withdrawals",
+			ctx:  context.WithValue(context.Background(), auth.UserIDKey, uid),
 			setupMock: func() {
 				s.service.EXPECT().GetWithdrawals(mock.Anything, uid).
 					Return(nil, nil)
@@ -185,11 +207,18 @@ func (s *BalanceHandlerSuite) TestGetWithdrawals() {
 		},
 		{
 			name: "error",
+			ctx:  context.WithValue(context.Background(), auth.UserIDKey, uid),
 			setupMock: func() {
 				s.service.EXPECT().GetWithdrawals(mock.Anything, uid).
 					Return(nil, errors.New("err"))
 			},
 			wantStatus: http.StatusInternalServerError,
+		},
+		{
+			name:       "missing user id",
+			ctx:        context.Background(),
+			setupMock:  func() {},
+			wantStatus: http.StatusUnauthorized,
 		},
 	}
 
@@ -197,8 +226,7 @@ func (s *BalanceHandlerSuite) TestGetWithdrawals() {
 		s.Run(tt.name, func() {
 			tt.setupMock()
 
-			ctx := context.WithValue(context.Background(), auth.UserIDKey, uid)
-			r := httptest.NewRequest(http.MethodGet, "/withdrawals", nil).WithContext(ctx)
+			r := httptest.NewRequest(http.MethodGet, "/withdrawals", nil).WithContext(tt.ctx)
 			w := httptest.NewRecorder()
 
 			s.handler.GetWithdrawals(w, r)

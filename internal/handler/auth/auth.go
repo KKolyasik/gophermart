@@ -46,18 +46,18 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	var userCredentials model.Credentials
 	if err := enc.Decode(&userCredentials); err != nil {
 		h.logger.With(slog.String("op", op)).Error("can not decode body", "err", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
 	token, err := h.service.Register(r.Context(), userCredentials.Login, userCredentials.Password)
 	if err != nil {
 		if errors.Is(err, domainerr.ErrAlreadyExists) {
-			h.logger.With(slog.String("op", op)).Error("user already exist", "err", err)
+			h.logger.With(slog.String("op", op)).Debug("user already exist", "err", err)
 			http.Error(w, err.Error(), http.StatusConflict)
 			return
 		}
-		h.logger.With(slog.String("op", op)).Error("registration error", "err", err)
+		h.logger.With(slog.String("op", op)).Debug("registration error", "err", err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -88,18 +88,18 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	var userCredentials model.Credentials
 	if err := enc.Decode(&userCredentials); err != nil {
 		h.logger.With(slog.String("op", op)).Error("can not decode body", "err", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
 	token, err := h.service.Login(r.Context(), userCredentials.Login, userCredentials.Password)
 	if err != nil {
 		if errors.Is(err, domainerr.ErrInvalidInput) {
-			h.logger.With(slog.String("op", op)).Error("incorrect login/password", "err", err)
+			h.logger.With(slog.String("op", op)).Debug("incorrect login/password", "err", err)
 			http.Error(w, "incorrect login/password", http.StatusUnauthorized)
 			return
 		}
-		h.logger.With(slog.String("op", op)).Error("login error", "err", err)
+		h.logger.With(slog.String("op", op)).Debug("login error", "err", err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}

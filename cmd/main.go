@@ -2,12 +2,10 @@ package main
 
 import (
 	"context"
-	"log"
 	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	"github.com/Kkolyasik/gophermart/internal/app"
 	"github.com/Kkolyasik/gophermart/internal/config"
@@ -23,22 +21,30 @@ func main() {
 
 	cfg, err := config.NewConfig()
 	if err != nil {
-		log.Fatal(err)
+		exitWithError(logger, "Не удалось загрузить конфигурацию", err)
 	}
 
-	app := app.NewApp(ctxApp, cfg, logger)
-	if err := app.Run(); err != nil {
-		log.Fatalf("listen: %s\n", err)
+	app, err := app.NewApp(ctxApp, cfg, logger)
+	if err != nil {
+		exitWithError(logger, "Не удалось инициализировать приложение", err)
+	}
+	serverErrCh := app.Run()
+
+	select {
+	case <-ctxApp.Done():
+		cancelApp()
+	case err, ok := <-serverErrCh:
+		if ok && err != nil {
+			exitWithError(logger, "Сервер остановился с ошибкой", err)
+		}
+		return
 	}
 
-	<-ctxApp.Done()
-	cancelApp()
-
-	ctxShutdown, cancelShutdown := context.WithTimeout(context.Background(), 5*time.Second)
+	ctxShutdown, cancelShutdown := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
 	defer cancelShutdown()
 
 	if err := app.Stop(ctxShutdown); err != nil {
-		log.Fatal("Сервер принудительно остановлен:", err)
+		exitWithError(logger, "Сервер принудительно остановлен", err)
 	}
 	logger.Info("Приложение остановилось")
 }
@@ -51,4 +57,9 @@ func initializeLogger() *slog.Logger {
 	))
 
 	return logger
+}
+
+func exitWithError(logger *slog.Logger, msg string, err error) {
+	logger.Error(msg, "err", err)
+	os.Exit(1)
 }

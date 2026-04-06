@@ -104,7 +104,21 @@ func (w *AccrualWorker) processOrder(ctx context.Context, order model.Order) {
 		switch {
 		case errors.As(err, &retryErr):
 			w.logger.With(slog.String("op", op)).Info("too many requests", "retry_after", retryErr.RetryAfter)
-			time.Sleep(time.Duration(retryErr.RetryAfter) * time.Second)
+			timer := time.NewTimer(time.Duration(retryErr.RetryAfter) * time.Second)
+			defer func() {
+				if !timer.Stop() {
+					select {
+					case <-timer.C:
+					default:
+					}
+				}
+			}()
+
+			select {
+			case <-ctx.Done():
+				return
+			case <-timer.C:
+			}
 		case errors.Is(err, domainerr.ErrNoDataFound):
 		case errors.Is(err, domainerr.ErrExternalServiceNotAvailable):
 			w.logger.With(slog.String("op", op)).Warn("accrual service unavailable")

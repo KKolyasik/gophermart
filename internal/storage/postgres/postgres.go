@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 
 	"github.com/Kkolyasik/gophermart/internal/domainerr"
@@ -23,16 +24,15 @@ type Storage struct {
 }
 
 // NewStorage создает подключение к PostgreSQL и возвращает storage-объект.
-func NewStorage(ctx context.Context, connURL string, logger *slog.Logger) *Storage {
+func NewStorage(ctx context.Context, connURL string, logger *slog.Logger) (*Storage, error) {
 	pool, err := pgxpool.New(ctx, connURL)
 	if err != nil {
-		logger.Info("can not connect to DB", "err", err)
-		panic(err)
+		return nil, fmt.Errorf("connect to db: %w", err)
 	}
 	return &Storage{
 		pool:   pool,
 		logger: logger,
-	}
+	}, nil
 }
 
 // Register создает пользователя и инициализирует его баланс.

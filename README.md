@@ -24,6 +24,7 @@
 - `ACCRUAL_SYSTEM_ADDRESS` — адрес accrual-сервиса
 - `SECRET_KEY` — ключ подписи JWT (если не задан, сгенерируется)
 - `RUN_ADDRESS` — поддерживается в config, но сейчас сервер в коде
+- `SHUTDOWN_TIMEOUT` — таймаут graceful shutdown (например, `30s`, `1m`)
 
 ## Быстрый запуск
 
@@ -39,6 +40,7 @@ psql "$DATABASE_URI" -f migrations/000001_initial_schema.up.sql
 export DATABASE_URI='postgres://user:password@localhost:5432/gophermart?sslmode=disable'
 export ACCRUAL_SYSTEM_ADDRESS='http://localhost:8081'
 export SECRET_KEY='super-secret-key'
+export SHUTDOWN_TIMEOUT='30s'
 ```
 
 3. Запустить сервис:

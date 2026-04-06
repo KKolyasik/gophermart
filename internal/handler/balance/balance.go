@@ -39,18 +39,25 @@ func NewBalanceHandler(logger *slog.Logger, service BalanceService) *BalanceHand
 func (h *BalanceHandler) GetBalance(w http.ResponseWriter, r *http.Request) {
 	const op = "http.balance.GetBalance"
 
-	uid := auth.GetUserID(r.Context())
-	balance, err := h.service.GetBalance(r.Context(), uid)
-	if err != nil {
-		h.logger.With(slog.String("op", op)).Error("couldn't get balance", "err", err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+	uid, ok := auth.GetUserID(r.Context())
+	if !ok {
+		h.logger.With(slog.String("op", op)).Debug("user id not found in context")
+		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 		return
 	}
 
+	balance, err := h.service.GetBalance(r.Context(), uid)
+	if err != nil {
+		h.logger.With(slog.String("op", op)).Error("couldn't get balance", "err", err)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
 	enc := json.NewEncoder(w)
 	if err := enc.Encode(balance); err != nil {
 		h.logger.With(slog.String("op", op)).Error("data could not be serialized", "err", err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
@@ -62,7 +69,7 @@ func (h *BalanceHandler) CreateWithdraw(w http.ResponseWriter, r *http.Request) 
 	const op = "handler.balance.Withdraw"
 
 	if r.Header.Get("Content-Type") != "application/json" {
-		h.logger.With(slog.String("op", op)).Info("invalid content type in request")
+		h.logger.With(slog.String("op", op)).Debug("invalid content type in request")
 		http.Error(w, "invalid content type", http.StatusBadRequest)
 		return
 	}
@@ -76,24 +83,30 @@ func (h *BalanceHandler) CreateWithdraw(w http.ResponseWriter, r *http.Request) 
 
 	var withdraw model.WithdrawRequest
 	if err := dec.Decode(&withdraw); err != nil {
-		h.logger.With(slog.String("op", op)).Error("can not encode answer", "err", err)
+		h.logger.With(slog.String("op", op)).Debug("can not decode request body", "err", err)
 		http.Error(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	uid := auth.GetUserID(r.Context())
+	uid, ok := auth.GetUserID(r.Context())
+	if !ok {
+		h.logger.With(slog.String("op", op)).Debug("user id not found in context")
+		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+		return
+	}
+
 	err := h.service.Withdraw(r.Context(), uid, withdraw.Sum, withdraw.Order)
 	if err != nil {
 		switch {
 		case errors.Is(err, domainerr.ErrInsufficientFunds):
-			h.logger.With(slog.String("op", op)).Info("user does not have enough funds", "err", err)
+			h.logger.With(slog.String("op", op)).Debug("user does not have enough funds", "err", err)
 			http.Error(w, "not have enough funds", http.StatusPaymentRequired)
 		case errors.Is(err, domainerr.ErrInvalidInput):
-			h.logger.With(slog.String("op", op)).Info("got invalid input", "err", err)
+			h.logger.With(slog.String("op", op)).Debug("got invalid input", "err", err)
 			http.Error(w, "invalid input", http.StatusUnprocessableEntity)
 		default:
 			h.logger.With(slog.String("op", op)).Error("funds could not be debited", "err", err)
-			http.Error(w, "internal server error", http.StatusInternalServerError)
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		}
 		return
 	}
@@ -105,11 +118,17 @@ func (h *BalanceHandler) CreateWithdraw(w http.ResponseWriter, r *http.Request) 
 func (h *BalanceHandler) GetWithdrawals(w http.ResponseWriter, r *http.Request) {
 	const op = "http.balance.Withdraw"
 
-	uid := auth.GetUserID(r.Context())
+	uid, ok := auth.GetUserID(r.Context())
+	if !ok {
+		h.logger.With(slog.String("op", op)).Debug("user id not found in context")
+		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+		return
+	}
+
 	withdrawals, err := h.service.GetWithdrawals(r.Context(), uid)
 	if err != nil {
 		h.logger.With(slog.String("op", op)).Error("couldn't get withdrawals", "err", err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
@@ -119,10 +138,11 @@ func (h *BalanceHandler) GetWithdrawals(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	w.Header().Set("Content-Type", "application/json")
 	enc := json.NewEncoder(w)
 	if err := enc.Encode(withdrawals); err != nil {
 		h.logger.With(slog.String("op", op)).Error("can not encode answer", "err", err)
-		http.Error(w, "invalid request body", http.StatusInternalServerError)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 

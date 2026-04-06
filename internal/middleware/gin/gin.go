@@ -51,14 +51,14 @@ func (m *Middlware) AuthMiddleware(ctx *gin.Context) {
 
 	token, err := ctx.Request.Cookie("Authorization")
 	if err != nil {
-		m.logger.With(slog.String("op", op)).Error("can not extract token", "err", err)
+		m.logger.With(slog.String("op", op)).Debug("can not extract token", "err", err)
 		ctx.AbortWithStatus(http.StatusUnauthorized)
 		return
 	}
 
 	uid, err := auth.ParseToken(token.Value, m.cfg)
 	if err != nil {
-		m.logger.With(slog.String("op", op)).Error("can not parse token", "err", err)
+		m.logger.With(slog.String("op", op)).Debug("can not parse token", "err", err)
 		ctx.AbortWithStatus(http.StatusUnauthorized)
 		return
 	}
@@ -80,7 +80,7 @@ func (m *Middlware) CompressionMiddleware(ctx *gin.Context) {
 		m.logger.With(slog.String("op", op)).Info("content decoding")
 		decoder, err := m.compressor.NewReader(ctx.Request.Body)
 		if err != nil {
-			m.logger.With(slog.String("op", op)).Error("decoder creation error", "err", err)
+			m.logger.With(slog.String("op", op)).Debug("decoder creation error", "err", err)
 			ctx.AbortWithStatus(http.StatusBadRequest)
 			return
 		}
@@ -94,7 +94,7 @@ func (m *Middlware) CompressionMiddleware(ctx *gin.Context) {
 		m.logger.With(slog.String("op", op)).Info("content encoding")
 		encoder, err := m.compressor.NewWriter(ctx.Writer)
 		if err != nil {
-			m.logger.With(slog.String("op", op)).Error("encoder creation error", "err", err)
+			m.logger.With(slog.String("op", op)).Debug("encoder creation error", "err", err)
 			ctx.AbortWithStatus(http.StatusBadRequest)
 			return
 		}

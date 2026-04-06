@@ -45,12 +45,14 @@ func (s *OrderHanlerSuite) TestCreateOrder() {
 	uid := uuid.New()
 	tests := []struct {
 		name       string
+		ctx        context.Context
 		setupMock  func()
 		body       string
 		wantStatus int
 	}{
 		{
 			name: "success",
+			ctx:  context.WithValue(context.Background(), auth.UserIDKey, uid),
 			setupMock: func() {
 				s.service.EXPECT().CreateOrder(mock.Anything, uid, "100").
 					Return(nil)
@@ -60,12 +62,14 @@ func (s *OrderHanlerSuite) TestCreateOrder() {
 		},
 		{
 			name:       "empty number",
+			ctx:        context.WithValue(context.Background(), auth.UserIDKey, uid),
 			setupMock:  func() { s.service.AssertNotCalled(s.T(), "CreateOrder") },
 			body:       "",
 			wantStatus: http.StatusBadRequest,
 		},
 		{
 			name: "invalid input",
+			ctx:  context.WithValue(context.Background(), auth.UserIDKey, uid),
 			setupMock: func() {
 				s.service.EXPECT().CreateOrder(mock.Anything, uid, "100").
 					Return(domainerr.ErrInvalidInput)
@@ -75,6 +79,7 @@ func (s *OrderHanlerSuite) TestCreateOrder() {
 		},
 		{
 			name: "invalid input",
+			ctx:  context.WithValue(context.Background(), auth.UserIDKey, uid),
 			setupMock: func() {
 				s.service.EXPECT().CreateOrder(mock.Anything, uid, "100").
 					Return(domainerr.ErrAlreadyExists)
@@ -84,6 +89,7 @@ func (s *OrderHanlerSuite) TestCreateOrder() {
 		},
 		{
 			name: "invalid input",
+			ctx:  context.WithValue(context.Background(), auth.UserIDKey, uid),
 			setupMock: func() {
 				s.service.EXPECT().CreateOrder(mock.Anything, uid, "100").
 					Return(domainerr.ErrConflict)
@@ -93,6 +99,7 @@ func (s *OrderHanlerSuite) TestCreateOrder() {
 		},
 		{
 			name: "invalid input",
+			ctx:  context.WithValue(context.Background(), auth.UserIDKey, uid),
 			setupMock: func() {
 				s.service.EXPECT().CreateOrder(mock.Anything, uid, "100").
 					Return(errors.New("error"))
@@ -100,14 +107,20 @@ func (s *OrderHanlerSuite) TestCreateOrder() {
 			body:       "100",
 			wantStatus: http.StatusInternalServerError,
 		},
+		{
+			name:       "missing user id",
+			ctx:        context.Background(),
+			setupMock:  func() {},
+			body:       "100",
+			wantStatus: http.StatusUnauthorized,
+		},
 	}
 
 	for _, tt := range tests {
 		s.Run(tt.name, func() {
 			tt.setupMock()
 
-			ctx := context.WithValue(context.Background(), auth.UserIDKey, uid)
-			r := httptest.NewRequest(http.MethodPost, "/orders", strings.NewReader(tt.body)).WithContext(ctx)
+			r := httptest.NewRequest(http.MethodPost, "/orders", strings.NewReader(tt.body)).WithContext(tt.ctx)
 			r.Header.Set("Content-Type", "text/plain")
 			w := httptest.NewRecorder()
 
@@ -130,12 +143,14 @@ func (s *OrderHanlerSuite) TestCalculatePoints() {
 	uploadedAt := time.Date(2026, 3, 25, 12, 0, 0, 0, time.UTC)
 	tests := []struct {
 		name       string
+		ctx        context.Context
 		setupMock  func()
 		body       []body
 		wantStatus int
 	}{
 		{
 			name: "success",
+			ctx:  context.WithValue(context.Background(), auth.UserIDKey, uid),
 			setupMock: func() {
 				s.service.EXPECT().GetOrders(mock.Anything, uid).
 					Return([]model.Order{
@@ -155,6 +170,7 @@ func (s *OrderHanlerSuite) TestCalculatePoints() {
 		},
 		{
 			name: "error",
+			ctx:  context.WithValue(context.Background(), auth.UserIDKey, uid),
 			setupMock: func() {
 				s.service.EXPECT().GetOrders(mock.Anything, uid).
 					Return(nil, errors.New("error"))
@@ -163,11 +179,18 @@ func (s *OrderHanlerSuite) TestCalculatePoints() {
 		},
 		{
 			name: "empty orders",
+			ctx:  context.WithValue(context.Background(), auth.UserIDKey, uid),
 			setupMock: func() {
 				s.service.EXPECT().GetOrders(mock.Anything, uid).
 					Return(nil, nil)
 			},
 			wantStatus: http.StatusNoContent,
+		},
+		{
+			name:       "missing user id",
+			ctx:        context.Background(),
+			setupMock:  func() {},
+			wantStatus: http.StatusUnauthorized,
 		},
 	}
 
@@ -175,8 +198,7 @@ func (s *OrderHanlerSuite) TestCalculatePoints() {
 		s.Run(tt.name, func() {
 			tt.setupMock()
 
-			ctx := context.WithValue(context.Background(), auth.UserIDKey, uid)
-			r := httptest.NewRequest(http.MethodPost, "/orders", nil).WithContext(ctx)
+			r := httptest.NewRequest(http.MethodPost, "/orders", nil).WithContext(tt.ctx)
 			w := httptest.NewRecorder()
 
 			s.handler.CalculatePoints(w, r)

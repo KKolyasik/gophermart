@@ -43,7 +43,7 @@ func (h *OrderHandler) CreateOrder(w http.ResponseWriter, r *http.Request) {
 	const op = "handler.order.CreateOrder"
 
 	if r.Header.Get("Content-Type") != conentType {
-		h.logger.With(slog.String("op", op)).Info("invalid content type in request")
+		h.logger.With(slog.String("op", op)).Debug("invalid content type in request")
 		http.Error(w, "invalid content type", http.StatusBadRequest)
 		return
 	}
@@ -51,34 +51,40 @@ func (h *OrderHandler) CreateOrder(w http.ResponseWriter, r *http.Request) {
 	body := http.MaxBytesReader(w, r.Body, 8<<10)
 	data, err := io.ReadAll(body)
 	if err != nil {
-		h.logger.With(slog.String("op", op)).Error("can not read body", "err", err)
+		h.logger.With(slog.String("op", op)).Debug("can not read body", "err", err)
 		http.Error(w, "can not read body", http.StatusBadRequest)
 		return
 	}
 
 	number := strings.TrimSpace(string(data))
 	if number == "" {
-		h.logger.With(slog.String("op", op)).Info("got empty number")
-		http.Error(w, "", http.StatusBadRequest)
+		h.logger.With(slog.String("op", op)).Debug("got empty number")
+		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 		return
 	}
 
-	uid := auth.GetUserID(r.Context())
+	uid, ok := auth.GetUserID(r.Context())
+	if !ok {
+		h.logger.With(slog.String("op", op)).Debug("user id not found in context")
+		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+		return
+	}
+
 	err = h.service.CreateOrder(r.Context(), uid, number)
 	if err != nil {
 		switch {
 		case errors.Is(err, domainerr.ErrInvalidInput):
-			h.logger.With(slog.String("op", op)).Info("got invalid input", "err", err)
+			h.logger.With(slog.String("op", op)).Debug("got invalid input", "err", err)
 			http.Error(w, "invalid input", http.StatusUnprocessableEntity)
 		case errors.Is(err, domainerr.ErrAlreadyExists):
-			h.logger.With(slog.String("op", op)).Info("user already has order with this number", "err", err)
+			h.logger.With(slog.String("op", op)).Debug("user already has order with this number", "err", err)
 			w.WriteHeader(http.StatusOK)
 		case errors.Is(err, domainerr.ErrConflict):
-			h.logger.With(slog.String("op", op)).Info("another user already has order with this number", "err", err)
+			h.logger.With(slog.String("op", op)).Debug("another user already has order with this number", "err", err)
 			w.WriteHeader(http.StatusConflict)
 		default:
 			h.logger.With(slog.String("op", op)).Error("can not get create or get order from DB", "err", err)
-			http.Error(w, "internal server error", http.StatusInternalServerError)
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		}
 		return
 	}
@@ -90,12 +96,17 @@ func (h *OrderHandler) CreateOrder(w http.ResponseWriter, r *http.Request) {
 func (h *OrderHandler) CalculatePoints(w http.ResponseWriter, r *http.Request) {
 	const op = "handler.order.CalculatePoints"
 
-	uid := auth.GetUserID(r.Context())
+	uid, ok := auth.GetUserID(r.Context())
+	if !ok {
+		h.logger.With(slog.String("op", op)).Debug("user id not found in context")
+		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+		return
+	}
 
 	orders, err := h.service.GetOrders(r.Context(), uid)
 	if err != nil {
 		h.logger.With(slog.String("op", op)).Error("can not get user's orders from DB", "err", err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
@@ -105,10 +116,11 @@ func (h *OrderHandler) CalculatePoints(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	w.Header().Set("Content-Type", "application/json")
 	enc := json.NewEncoder(w)
 	if err := enc.Encode(orders); err != nil {
 		h.logger.With(slog.String("op", op)).Error("can not encode answer", "err", err)
-		http.Error(w, "internal server errorx", http.StatusInternalServerError)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 	w.WriteHeader(http.StatusOK)
