@@ -9,12 +9,18 @@ import (
 	"github.com/Kkolyasik/gophermart/internal/domainerr"
 	"github.com/Kkolyasik/gophermart/internal/model"
 	sq "github.com/Masterminds/squirrel"
+	"github.com/golang-migrate/migrate/v4"
+	migratepgx "github.com/golang-migrate/migrate/v4/database/pgx/v5"
+	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/google/uuid"
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5/stdlib"
 )
+
+const migrationsTable = "gophermart_schema_migrations"
 
 // Storage реализует доступ к данным через PostgreSQL.
 type Storage struct {
@@ -34,7 +40,7 @@ func NewStorage(ctx context.Context, connURL string, logger *slog.Logger) (*Stor
 		pool:   pool,
 		logger: logger,
 	}
-	if err := storage.initSchema(ctx); err != nil {
+	if err := storage.initSchema(); err != nil {
 		pool.Close()
 		return nil, fmt.Errorf("init schema: %w", err)
 	}
@@ -42,46 +48,32 @@ func NewStorage(ctx context.Context, connURL string, logger *slog.Logger) (*Stor
 	return storage, nil
 }
 
-func (s *Storage) initSchema(ctx context.Context) error {
-	const schema = `
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
+func (s *Storage) initSchema() error {
+	db := stdlib.OpenDBFromPool(s.pool)
+	defer db.Close()
 
-CREATE TABLE IF NOT EXISTS users (
-    id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    login      VARCHAR(256) NOT NULL UNIQUE,
-    password   VARCHAR(256) NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
+	driver, err := migratepgx.WithInstance(db, &migratepgx.Config{
+		MigrationsTable: migrationsTable,
+	})
+	if err != nil {
+		return fmt.Errorf("create migration driver: %w", err)
+	}
 
-CREATE TABLE IF NOT EXISTS balances (
-    user_id   UUID PRIMARY KEY REFERENCES users(id),
-    current   NUMERIC(15,2) NOT NULL DEFAULT 0,
-    withdrawn NUMERIC(15,2) NOT NULL DEFAULT 0
-);
+	migrator, err := migrate.NewWithDatabaseInstance("file://migrations", "pgx5", driver)
+	if err != nil {
+		return fmt.Errorf("create migrator: %w", err)
+	}
+	defer func() {
+		sourceErr, databaseErr := migrator.Close()
+		if closeErr := errors.Join(sourceErr, databaseErr); closeErr != nil {
+			s.logger.With(slog.String("op", "storage.postgres.initSchema")).Error("migration close error", "err", closeErr)
+		}
+	}()
 
-CREATE TABLE IF NOT EXISTS orders (
-    id          BIGSERIAL PRIMARY KEY,
-    user_id     UUID NOT NULL REFERENCES users(id),
-    number      VARCHAR(64) NOT NULL UNIQUE,
-    status      VARCHAR(16) NOT NULL DEFAULT 'NEW',
-    accrual     NUMERIC(15,2),
-    uploaded_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
-CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id);
-
-CREATE TABLE IF NOT EXISTS withdrawals (
-    id           BIGSERIAL PRIMARY KEY,
-    user_id      UUID NOT NULL REFERENCES users(id),
-    order_number VARCHAR(64) NOT NULL,
-    sum          NUMERIC(15,2) NOT NULL,
-    processed_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
-CREATE INDEX IF NOT EXISTS idx_withdrawals_user_id ON withdrawals(user_id);
-`
-	_, err := s.pool.Exec(ctx, schema)
-	return err
+	if err := migrator.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
+		return fmt.Errorf("run migrations: %w", err)
+	}
+	return nil
 }
 
 // Register создает пользователя и инициализирует его баланс.

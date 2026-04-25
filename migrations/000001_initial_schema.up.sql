@@ -1,17 +1,19 @@
-CREATE TABLE users (
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+CREATE TABLE IF NOT EXISTS users (
     id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     login      VARCHAR(256) NOT NULL UNIQUE,
     password   VARCHAR(256) NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE TABLE balances (
+CREATE TABLE IF NOT EXISTS balances (
     user_id   UUID PRIMARY KEY REFERENCES users(id),
     current   NUMERIC(15,2) NOT NULL DEFAULT 0,
     withdrawn NUMERIC(15,2) NOT NULL DEFAULT 0
 );
 
-CREATE TABLE orders (
+CREATE TABLE IF NOT EXISTS orders (
     id          BIGSERIAL PRIMARY KEY,
     user_id     UUID NOT NULL REFERENCES users(id),
     number      VARCHAR(64) NOT NULL UNIQUE,
@@ -20,9 +22,9 @@ CREATE TABLE orders (
     uploaded_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX idx_orders_user_id ON orders(user_id);
+CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id);
 
-CREATE TABLE withdrawals (
+CREATE TABLE IF NOT EXISTS withdrawals (
     id           BIGSERIAL PRIMARY KEY,
     user_id      UUID NOT NULL REFERENCES users(id),
     order_number VARCHAR(64) NOT NULL,
@@ -30,4 +32,4 @@ CREATE TABLE withdrawals (
     processed_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX idx_withdrawals_user_id ON withdrawals(user_id);
+CREATE INDEX IF NOT EXISTS idx_withdrawals_user_id ON withdrawals(user_id);
