@@ -68,7 +68,6 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		Path:     "/",
 		MaxAge:   3600,
 		HttpOnly: true,
-		Secure:   true,
 	})
 
 	w.WriteHeader(http.StatusOK)
@@ -110,7 +109,6 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		Path:     "/",
 		MaxAge:   3600,
 		HttpOnly: true,
-		Secure:   true,
 	})
 
 	w.WriteHeader(http.StatusOK)

@@ -38,6 +38,11 @@ func NewAuthService(logger *slog.Logger, cfg *config.Config, storage AuthStorage
 func (s *AuthService) Register(ctx context.Context, login, password string) (string, error) {
 	const op = "service.auth.Register"
 
+	if login == "" || password == "" {
+		s.logger.With(slog.String("op", op)).Info("got empty login or password")
+		return "", domainerr.ErrInvalidInput
+	}
+
 	hash, err := hashPassword(password)
 	if err != nil {
 		s.logger.With(slog.String("op", op)).Error("can not create hash", "err", err)
@@ -63,6 +68,11 @@ func (s *AuthService) Register(ctx context.Context, login, password string) (str
 // Login проверяет учетные данные и возвращает токен.
 func (s *AuthService) Login(ctx context.Context, login, password string) (string, error) {
 	const op = "service.auth.Register"
+
+	if login == "" || password == "" {
+		s.logger.With(slog.String("op", op)).Info("got empty login or password")
+		return "", domainerr.ErrInvalidInput
+	}
 
 	uid, hash, err := s.storage.Login(ctx, login)
 	if err != nil {

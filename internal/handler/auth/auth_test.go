@@ -99,7 +99,7 @@ func (s *AuthHandlerSuite) TestRegister() {
 				s.Require().NotNil(authCookie)
 				s.Equal("token-abc", authCookie.Value)
 				s.True(authCookie.HttpOnly)
-				s.True(authCookie.Secure)
+				s.False(authCookie.Secure)
 				s.Equal("/", authCookie.Path)
 				s.Equal(3600, authCookie.MaxAge)
 			} else {
@@ -173,7 +173,7 @@ func (s *AuthHandlerSuite) TestAuth() {
 				s.Require().NotNil(authCookie)
 				s.Equal("token-abc", authCookie.Value)
 				s.True(authCookie.HttpOnly)
-				s.True(authCookie.Secure)
+				s.False(authCookie.Secure)
 				s.Equal("/", authCookie.Path)
 				s.Equal(3600, authCookie.MaxAge)
 			} else {

@@ -29,10 +29,59 @@ func NewStorage(ctx context.Context, connURL string, logger *slog.Logger) (*Stor
 	if err != nil {
 		return nil, fmt.Errorf("connect to db: %w", err)
 	}
-	return &Storage{
+
+	storage := &Storage{
 		pool:   pool,
 		logger: logger,
-	}, nil
+	}
+	if err := storage.initSchema(ctx); err != nil {
+		pool.Close()
+		return nil, fmt.Errorf("init schema: %w", err)
+	}
+
+	return storage, nil
+}
+
+func (s *Storage) initSchema(ctx context.Context) error {
+	const schema = `
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+CREATE TABLE IF NOT EXISTS users (
+    id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    login      VARCHAR(256) NOT NULL UNIQUE,
+    password   VARCHAR(256) NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS balances (
+    user_id   UUID PRIMARY KEY REFERENCES users(id),
+    current   NUMERIC(15,2) NOT NULL DEFAULT 0,
+    withdrawn NUMERIC(15,2) NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS orders (
+    id          BIGSERIAL PRIMARY KEY,
+    user_id     UUID NOT NULL REFERENCES users(id),
+    number      VARCHAR(64) NOT NULL UNIQUE,
+    status      VARCHAR(16) NOT NULL DEFAULT 'NEW',
+    accrual     NUMERIC(15,2),
+    uploaded_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id);
+
+CREATE TABLE IF NOT EXISTS withdrawals (
+    id           BIGSERIAL PRIMARY KEY,
+    user_id      UUID NOT NULL REFERENCES users(id),
+    order_number VARCHAR(64) NOT NULL,
+    sum          NUMERIC(15,2) NOT NULL,
+    processed_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_withdrawals_user_id ON withdrawals(user_id);
+`
+	_, err := s.pool.Exec(ctx, schema)
+	return err
 }
 
 // Register создает пользователя и инициализирует его баланс.
@@ -114,6 +163,9 @@ func (s *Storage) Login(ctx context.Context, login string) (uuid.UUID, string, e
 	)
 	err = row.Scan(&uid, &password)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return uuid.Nil, "", domainerr.ErrInvalidInput
+		}
 		s.logger.With(slog.String("op", op)).Error("can not scan uid or password", "err", err)
 		return uuid.Nil, "", err
 	}
@@ -274,6 +326,7 @@ func (s *Storage) GetUserOrders(ctx context.Context, uid uuid.UUID) ([]model.Ord
 		Select("user_id", "number", "status", "accrual", "uploaded_at").
 		From("orders").
 		Where(sq.Eq{"user_id": uid}).
+		OrderBy("uploaded_at ASC").
 		PlaceholderFormat(sq.Dollar).
 		ToSql()
 	if err != nil {
@@ -403,6 +456,7 @@ func (s *Storage) GetWithdrawals(ctx context.Context, uid uuid.UUID) ([]model.Wi
 	query, args, err := sq.Select("user_id", "order_number", "sum", "processed_at").
 		From("withdrawals").
 		Where(sq.Eq{"user_id": uid}).
+		OrderBy("processed_at ASC").
 		PlaceholderFormat(sq.Dollar).
 		ToSql()
 	if err != nil {
