@@ -41,7 +41,11 @@ func (p *Provider) GetOrderAccrual(ctx context.Context, orderNumber string) (mod
 		return model.AccrualResponse{}, err
 	}
 
-	response, err := p.client.Get(url)
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return model.AccrualResponse{}, err
+	}
+	response, err := p.client.Do(request)
 	if err != nil {
 		return model.AccrualResponse{}, err
 	}
@@ -63,7 +67,7 @@ func (p *Provider) GetOrderAccrual(ctx context.Context, orderNumber string) (mod
 		return model.AccrualResponse{}, domainerr.ErrNoDataFound
 	case http.StatusTooManyRequests:
 		retryAfter, err := strconv.Atoi(response.Header.Get("Retry-After"))
-		if err != nil {
+		if err == nil {
 			return model.AccrualResponse{}, domainerr.NewRetryAfterError(retryAfter)
 		}
 		return model.AccrualResponse{}, err

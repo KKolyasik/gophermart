@@ -15,8 +15,8 @@ var ErrInvalidToken = errors.New("invalid token")
 
 type ctxKey string
 
-// UserIDKey — ключ uid пользователя в context.
-const UserIDKey ctxKey = "uid"
+// userIDKey — ключ uid пользователя в context.
+const userIDKey ctxKey = "uid"
 
 // UserClaims хранит uid пользователя в JWT.
 type UserClaims struct {
@@ -26,8 +26,12 @@ type UserClaims struct {
 
 // GetUserID достает uid пользователя из context.
 func GetUserID(ctx context.Context) (uuid.UUID, bool) {
-	uid, ok :=  ctx.Value(UserIDKey).(uuid.UUID)
+	uid, ok :=  ctx.Value(userIDKey).(uuid.UUID)
 	return uid, ok
+}
+
+func WithUserID(ctx context.Context, uid uuid.UUID) context.Context {
+	return context.WithValue(ctx, userIDKey, uid)
 }
 
 // GenerateToken создает JWT-токен для пользователя.

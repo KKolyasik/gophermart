@@ -1,7 +1,6 @@
 package ginMiddlewre
 
 import (
-	"context"
 	"io"
 	"log/slog"
 	"net/http"
@@ -64,7 +63,7 @@ func (m *Middlware) AuthMiddleware(ctx *gin.Context) {
 	}
 
 	m.logger.With(slog.String("op", op)).Info("uid successfully added to context")
-	ctx.Request = ctx.Request.WithContext(context.WithValue(ctx.Request.Context(), auth.UserIDKey, uid))
+	ctx.Request = ctx.Request.WithContext(auth.WithUserID(ctx.Request.Context(), uid))
 	ctx.Next()
 }
 

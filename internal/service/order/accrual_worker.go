@@ -63,72 +63,91 @@ func (w *AccrualWorker) Run(ctx context.Context) {
 			return
 		case <-ticker.C:
 			w.logger.With(slog.String("op", op)).Debug("start of order processing")
-			w.processOrders(ctx)
+			if retryAfter, ok := w.processOrders(ctx); ok {
+				wait(ctx, retryAfter)
+			}
 		}
 	}
 }
 
-func (w *AccrualWorker) processOrders(ctx context.Context) {
+func (w *AccrualWorker) processOrders(ctx context.Context) (time.Duration, bool) {
 	const op = "service.order.processOrders"
 
 	orders, err := w.storage.GetUnprocessedOrders(ctx)
 	w.logger.With(slog.String("op", op)).Debug("records were received from the database", "amount", len(orders))
 	if err != nil {
-		return
+		return 0, false
 	}
+
+	batchCtx, cancelBatch := context.WithCancel(ctx)
+	defer cancelBatch()
+
+	retryAfterCh := make(chan time.Duration, 1)
 
 	var wg sync.WaitGroup
 	sem := make(chan struct{}, 5)
+
+loop:
 	for _, order := range orders {
 		select {
-		case <-ctx.Done():
-			return
+		case <-batchCtx.Done():
+			break loop
 		case sem <- struct{}{}:
 			wg.Go(func() {
 				defer func() { <-sem }()
-				w.processOrder(ctx, order)
+				if err := w.processOrder(batchCtx, order); err != nil {
+					var retryErr *domainerr.RetryAfterError
+					switch {
+					case errors.As(err, &retryErr):
+						w.logger.With(slog.String("op", op)).Info("too many requests", "retry_after", retryErr.RetryAfter)
+						select {
+						case retryAfterCh <- time.Second * time.Duration(retryErr.RetryAfter):
+							cancelBatch()
+						default:
+						}
+					case errors.Is(err, context.Canceled):
+					case errors.Is(err, domainerr.ErrNoDataFound):
+					case errors.Is(err, domainerr.ErrExternalServiceNotAvailable):
+						w.logger.With(slog.String("op", op)).Warn("accrual service unavailable")
+					default:
+						w.logger.With(slog.String("op", op)).Error("unexpected error", "error", err)
+					}
+				}
 			})
 		}
 	}
 	wg.Wait()
+
+	select {
+	case duration := <-retryAfterCh:
+		return duration, true
+	default:
+	}
+
 	w.logger.With(slog.String("op", op)).Debug("processing completed")
+	return 0, false
 }
 
-func (w *AccrualWorker) processOrder(ctx context.Context, order model.Order) {
+func (w *AccrualWorker) processOrder(ctx context.Context, order model.Order) error {
 	const op = "service.order.processOrder"
 
 	accrual, err := w.client.GetOrderAccrual(ctx, order.Number)
 	if err != nil {
-		w.logger.With(slog.String("op", op)).Error("error when sending a request to the points calculation service")
-		var retryErr *domainerr.RetryAfterError
-		switch {
-		case errors.As(err, &retryErr):
-			w.logger.With(slog.String("op", op)).Info("too many requests", "retry_after", retryErr.RetryAfter)
-			timer := time.NewTimer(time.Duration(retryErr.RetryAfter) * time.Second)
-			defer func() {
-				if !timer.Stop() {
-					select {
-					case <-timer.C:
-					default:
-					}
-				}
-			}()
-
-			select {
-			case <-ctx.Done():
-				return
-			case <-timer.C:
-			}
-		case errors.Is(err, domainerr.ErrNoDataFound):
-		case errors.Is(err, domainerr.ErrExternalServiceNotAvailable):
-			w.logger.With(slog.String("op", op)).Warn("accrual service unavailable")
-		default:
-			w.logger.With(slog.String("op", op)).Error("unexpected error", "error", err)
-		}
-		return
+		return err
 	}
 
 	if err := w.storage.CompleteOrder(ctx, order.UserID, order.Number, accrual.Status, accrual.Accrual); err != nil {
 		w.logger.With(slog.String("op", op)).Error("error when requesting the database", "err", err)
+		return err
+	}
+	return nil
+}
+
+func wait(ctx context.Context, duration time.Duration) {
+	timer := time.NewTimer(duration)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+	case <-timer.C:
 	}
 }

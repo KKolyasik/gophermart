@@ -85,7 +85,7 @@ func (s *MiddlwareSuite) TestAuthMiddleware() {
 			router := gin.New()
 			router.Use(s.middleware.AuthMiddleware)
 			router.GET("/protected", func(ctx *gin.Context) {
-				contextUID := ctx.Request.Context().Value(auth.UserIDKey)
+				contextUID, _ := auth.GetUserID(ctx.Request.Context())
 				s.Require().NotNil(contextUID)
 				s.Require().Equal(uid, contextUID)
 				ctx.Status(http.StatusOK)

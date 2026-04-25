@@ -52,7 +52,7 @@ func (s *BalanceHandlerSuite) TestGetBalance() {
 	}{
 		{
 			name: "success",
-			ctx:  context.WithValue(context.Background(), auth.UserIDKey, uid),
+			ctx:  auth.WithUserID(context.Background(), uid),
 			setupMock: func() {
 				s.service.EXPECT().GetBalance(mock.Anything, uid).Return(
 					model.Balance{UserId: uid, Current: 1000, Withdrawn: 500}, nil,
@@ -63,7 +63,7 @@ func (s *BalanceHandlerSuite) TestGetBalance() {
 		},
 		{
 			name: "service error",
-			ctx:  context.WithValue(context.Background(), auth.UserIDKey, uid),
+			ctx:  auth.WithUserID(context.Background(), uid),
 			setupMock: func() {
 				s.service.EXPECT().GetBalance(mock.Anything, uid).Return(
 					model.Balance{}, errors.New("service error"),
@@ -108,7 +108,7 @@ func (s *BalanceHandlerSuite) TestCreateWithdraw() {
 	}{
 		{
 			name: "success",
-			ctx:  context.WithValue(context.Background(), auth.UserIDKey, uid),
+			ctx:  auth.WithUserID(context.Background(), uid),
 			setupMock: func() {
 				s.service.EXPECT().Withdraw(mock.Anything, uid, 100.0, "100").
 					Return(nil)
@@ -118,7 +118,7 @@ func (s *BalanceHandlerSuite) TestCreateWithdraw() {
 		},
 		{
 			name: "not enough funds",
-			ctx:  context.WithValue(context.Background(), auth.UserIDKey, uid),
+			ctx:  auth.WithUserID(context.Background(), uid),
 			setupMock: func() {
 				s.service.EXPECT().Withdraw(mock.Anything, uid, 100.0, "100").
 					Return(domainerr.ErrInsufficientFunds)
@@ -128,7 +128,7 @@ func (s *BalanceHandlerSuite) TestCreateWithdraw() {
 		},
 		{
 			name: "invalid input",
-			ctx:  context.WithValue(context.Background(), auth.UserIDKey, uid),
+			ctx:  auth.WithUserID(context.Background(), uid),
 			setupMock: func() {
 				s.service.EXPECT().Withdraw(mock.Anything, uid, 100.0, "100").
 					Return(domainerr.ErrInvalidInput)
@@ -138,7 +138,7 @@ func (s *BalanceHandlerSuite) TestCreateWithdraw() {
 		},
 		{
 			name: "error",
-			ctx:  context.WithValue(context.Background(), auth.UserIDKey, uid),
+			ctx:  auth.WithUserID(context.Background(), uid),
 			setupMock: func() {
 				s.service.EXPECT().Withdraw(mock.Anything, uid, 100.0, "100").
 					Return(errors.New("error"))
@@ -186,7 +186,7 @@ func (s *BalanceHandlerSuite) TestGetWithdrawals() {
 	}{
 		{
 			name: "success",
-			ctx:  context.WithValue(context.Background(), auth.UserIDKey, uid),
+			ctx:  auth.WithUserID(context.Background(), uid),
 			setupMock: func() {
 				s.service.EXPECT().GetWithdrawals(mock.Anything, uid).
 					Return([]model.Withdraw{
@@ -198,7 +198,7 @@ func (s *BalanceHandlerSuite) TestGetWithdrawals() {
 		},
 		{
 			name: "no withdrawals",
-			ctx:  context.WithValue(context.Background(), auth.UserIDKey, uid),
+			ctx:  auth.WithUserID(context.Background(), uid),
 			setupMock: func() {
 				s.service.EXPECT().GetWithdrawals(mock.Anything, uid).
 					Return(nil, nil)
@@ -207,7 +207,7 @@ func (s *BalanceHandlerSuite) TestGetWithdrawals() {
 		},
 		{
 			name: "error",
-			ctx:  context.WithValue(context.Background(), auth.UserIDKey, uid),
+			ctx:  auth.WithUserID(context.Background(), uid),
 			setupMock: func() {
 				s.service.EXPECT().GetWithdrawals(mock.Anything, uid).
 					Return(nil, errors.New("err"))

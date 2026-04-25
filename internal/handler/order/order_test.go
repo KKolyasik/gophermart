@@ -52,7 +52,7 @@ func (s *OrderHanlerSuite) TestCreateOrder() {
 	}{
 		{
 			name: "success",
-			ctx:  context.WithValue(context.Background(), auth.UserIDKey, uid),
+			ctx:  auth.WithUserID(context.Background(), uid),
 			setupMock: func() {
 				s.service.EXPECT().CreateOrder(mock.Anything, uid, "100").
 					Return(nil)
@@ -62,14 +62,14 @@ func (s *OrderHanlerSuite) TestCreateOrder() {
 		},
 		{
 			name:       "empty number",
-			ctx:        context.WithValue(context.Background(), auth.UserIDKey, uid),
+			ctx:        auth.WithUserID(context.Background(), uid),
 			setupMock:  func() { s.service.AssertNotCalled(s.T(), "CreateOrder") },
 			body:       "",
 			wantStatus: http.StatusBadRequest,
 		},
 		{
 			name: "invalid input",
-			ctx:  context.WithValue(context.Background(), auth.UserIDKey, uid),
+			ctx:  auth.WithUserID(context.Background(), uid),
 			setupMock: func() {
 				s.service.EXPECT().CreateOrder(mock.Anything, uid, "100").
 					Return(domainerr.ErrInvalidInput)
@@ -79,7 +79,7 @@ func (s *OrderHanlerSuite) TestCreateOrder() {
 		},
 		{
 			name: "invalid input",
-			ctx:  context.WithValue(context.Background(), auth.UserIDKey, uid),
+			ctx:  auth.WithUserID(context.Background(), uid),
 			setupMock: func() {
 				s.service.EXPECT().CreateOrder(mock.Anything, uid, "100").
 					Return(domainerr.ErrAlreadyExists)
@@ -89,7 +89,7 @@ func (s *OrderHanlerSuite) TestCreateOrder() {
 		},
 		{
 			name: "invalid input",
-			ctx:  context.WithValue(context.Background(), auth.UserIDKey, uid),
+			ctx:  auth.WithUserID(context.Background(), uid),
 			setupMock: func() {
 				s.service.EXPECT().CreateOrder(mock.Anything, uid, "100").
 					Return(domainerr.ErrConflict)
@@ -99,7 +99,7 @@ func (s *OrderHanlerSuite) TestCreateOrder() {
 		},
 		{
 			name: "invalid input",
-			ctx:  context.WithValue(context.Background(), auth.UserIDKey, uid),
+			ctx:  auth.WithUserID(context.Background(), uid),
 			setupMock: func() {
 				s.service.EXPECT().CreateOrder(mock.Anything, uid, "100").
 					Return(errors.New("error"))
@@ -150,7 +150,7 @@ func (s *OrderHanlerSuite) TestCalculatePoints() {
 	}{
 		{
 			name: "success",
-			ctx:  context.WithValue(context.Background(), auth.UserIDKey, uid),
+			ctx:  auth.WithUserID(context.Background(), uid),
 			setupMock: func() {
 				s.service.EXPECT().GetOrders(mock.Anything, uid).
 					Return([]model.Order{
@@ -170,7 +170,7 @@ func (s *OrderHanlerSuite) TestCalculatePoints() {
 		},
 		{
 			name: "error",
-			ctx:  context.WithValue(context.Background(), auth.UserIDKey, uid),
+			ctx:  auth.WithUserID(context.Background(), uid),
 			setupMock: func() {
 				s.service.EXPECT().GetOrders(mock.Anything, uid).
 					Return(nil, errors.New("error"))
@@ -179,7 +179,7 @@ func (s *OrderHanlerSuite) TestCalculatePoints() {
 		},
 		{
 			name: "empty orders",
-			ctx:  context.WithValue(context.Background(), auth.UserIDKey, uid),
+			ctx:  auth.WithUserID(context.Background(), uid),
 			setupMock: func() {
 				s.service.EXPECT().GetOrders(mock.Anything, uid).
 					Return(nil, nil)
