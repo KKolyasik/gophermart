@@ -26,10 +26,11 @@ type UserClaims struct {
 
 // GetUserID достает uid пользователя из context.
 func GetUserID(ctx context.Context) (uuid.UUID, bool) {
-	uid, ok :=  ctx.Value(userIDKey).(uuid.UUID)
+	uid, ok := ctx.Value(userIDKey).(uuid.UUID)
 	return uid, ok
 }
 
+// WithUserID добавляет uid пользователя в context.
 func WithUserID(ctx context.Context, uid uuid.UUID) context.Context {
 	return context.WithValue(ctx, userIDKey, uid)
 }
